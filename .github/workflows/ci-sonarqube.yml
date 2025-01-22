@@ -1,0 +1,58 @@
+name: CI with SonarQube
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  build-and-analyze:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Checkout del código
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      # 2. Configuración de .NET
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: 8.0
+
+      # 3. Restaurar dependencias
+      - name: Restore dependencies
+        run: dotnet restore ./testsonnar
+
+      # 4. Compilar el proyecto
+      - name: Build solution
+        run: dotnet build ./testsonnar --no-restore
+
+      # 5. Ejecutar pruebas con cobertura de código
+      - name: Run tests with coverage
+        run: |
+          dotnet test ./testsonnar --collect:"XPlat Code Coverage" --results-directory ./TestResults
+        continue-on-error: true
+
+      # 6. Instalar SonarScanner
+      - name: Install SonarScanner
+        run: dotnet tool install --global dotnet-sonarscanner
+
+      # 7. Analizar el código con SonarQube
+      - name: Run SonarQube analysis
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+        run: |
+          dotnet sonarscanner begin \
+            /k:"Taller" \
+            /d:sonar.host.url="${{ secrets.SONAR_HOST_URL }}" \
+            /d:sonar.login="${{ secrets.SONAR_TOKEN }}" \
+            /d:sonar.cs.opencover.reportsPaths="./TestResults/**/coverage.opencover.xml"
+
+          dotnet build ./testsonnar --no-incremental
+
+          dotnet sonarscanner end /d:sonar.login="${{ secrets.SONAR_TOKEN }}"
